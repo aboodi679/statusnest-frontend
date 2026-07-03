@@ -1,5 +1,9 @@
 # StatusNest Frontend
 
+
+<img width="958" height="466" alt="Screenshot 2026-07-03 144851" src="https://github.com/user-attachments/assets/02f2588a-eb16-473c-b1a2-31564996bc8f" />
+
+
 > React dashboard for StatusNest — hosted on AWS S3 + CloudFront
 
 A clean, dark-themed React application that serves as the public-facing frontend for StatusNest. Users can view live status pages for any registered tenant.
