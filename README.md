@@ -1,104 +1,113 @@
-# StatusNest Frontend
+# StatusNest Infra
 
+Terraform IaC for the StatusNest multi-tenant service monitoring platform. Provisions the complete AWS infrastructure across modular, reusable components.
 
-<img width="958" height="466" alt="Screenshot 2026-07-03 144851" src="https://github.com/user-attachments/assets/02f2588a-eb16-473c-b1a2-31564996bc8f" />
-
-
-> React dashboard for StatusNest — hosted on AWS S3 + CloudFront
-
-A clean, dark-themed React application that serves as the public-facing frontend for StatusNest. Users can view live status pages for any registered tenant.
-
-**Live:** http://statusnest-dev-frontend.s3-website.us-east-1.amazonaws.com
+**Account:** `026243800492` | **Region:** `us-east-1`
 
 ---
 
-## Features
-
-- **Landing page** — enter any username to view their live status page
-- **Public status page** — shows all monitored services with UP/DOWN status and latency
-- **Incident banner** — displays active incidents at the top
-- **Service history** — 24h status history per service
-- **Real-time data** — reads from Redis via Status Page Service (updated every 60s)
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Framework | React 18 |
-| Styling | Inline CSS + Google Fonts (Inter) |
-| Hosting | AWS S3 Static Website |
-| Build | Create React App |
-| CI/CD | GitHub Actions |
-
----
-
-## Project Structure
+## Architecture
 
 ```
-statusnest-frontend/
-├── public/
-│   └── index.html
-├── src/
-│   ├── pages/
-│   │   └── StatusPage.js      # Public status page view
-│   ├── components/
-│   │   └── ServiceCard.js     # Individual service status card
-│   ├── App.js                 # Landing page + routing
-│   └── index.js
-├── .github/
-│   └── workflows/
-│       └── deploy.yml         # S3 deploy on push to main
-└── package.json
+Internet
+    │
+    ▼
+AWS WAF v2
+    │
+    ▼
+CloudFront (d1wwgn689544k.cloudfront.net)
+    ├── /auth/*  ──────────────────────────────────┐
+    ├── /api/*   ──────────────────────────────────┤
+    │                                              ▼
+    │                                    ALB (statusnest-dev-alb)
+    │                                              │
+    │                              ┌───────────────┼───────────────┐
+    │                              ▼               ▼               ▼
+    │                         auth:8000      monitor:8001    status:8002
+    │                         ECS Fargate    ECS Fargate     ECS Fargate
+    │                              │               │               │
+    └── default → S3 ─────────┐   └───────────────┴───────────────┘
+                               ▼               │
+                         React SPA         RDS PostgreSQL
+                                            ElastiCache Redis
 ```
 
 ---
 
-## Local Development
+## Modules
+
+| Module | Resources |
+|---|---|
+| `vpc` | VPC, public/private subnets, IGW, NAT Gateway, route tables |
+| `rds` | RDS PostgreSQL, subnet group, security group |
+| `elasticache` | Redis cluster, subnet group, security group |
+| `ecr` | ECR repositories for auth, monitor, status images |
+| `ecs` | ECS cluster, Fargate task definitions, services, IAM roles |
+| `alb` | Application Load Balancer, target groups, listener rules |
+| `frontend` | S3 bucket, CloudFront distribution, OAC, bucket policy |
+| `waf` | WAF v2 Web ACL (CloudFront-scoped, `us-east-1`) |
+| `waf-alb` | WAF v2 Web ACL (ALB-scoped, regional) |
+| `monitoring` | CloudWatch dashboards, alarms |
+
+---
+
+## Key Infrastructure
+
+| Resource | Value |
+|---|---|
+| CloudFront | `d1wwgn689544k.cloudfront.net` (ID: `E1PD475EXURYXL`) |
+| ALB | `statusnest-dev-alb-1293848550.us-east-1.elb.amazonaws.com` |
+| ECS Cluster | `statusnest-dev-cluster` |
+| RDS | `statusnest-dev-db.c2hcyc4yyuxy.us-east-1.rds.amazonaws.com` |
+| Redis | `statusnest-dev-redis.b8x2ra.0001.use1.cache.amazonaws.com:6379` |
+| S3 Bucket | `statusnest-dev-frontend` |
+| GitHub Actions Role | `arn:aws:iam::026243800492:role/statusnest-dev-github-actions-role` |
+
+---
+
+## Usage
 
 ```bash
-git clone https://github.com/aboodi679/statusnest-frontend
-cd statusnest-frontend
-npm install
-npm start
+cd statusnest-infra
+
+# Init
+terraform init
+
+# Plan
+terraform plan -var="environment=dev"
+
+# Apply
+terraform apply -var="environment=dev"
 ```
 
-Opens at `http://localhost:3000`
+### Variables
+
+| Variable | Description |
+|---|---|
+| `environment` | Deployment environment (`dev`, `prod`) |
 
 ---
 
-## Deployment
+## CI/CD Integration
 
-Build and sync to S3:
+GitHub Actions uses OIDC to assume the GitHub Actions IAM role — no long-lived AWS credentials stored in GitHub secrets.
 
-```bash
-npm run build
-aws s3 sync build/ s3://statusnest-dev-frontend --region us-east-1
-```
-
-CI/CD via GitHub Actions — auto deploys on every push to `main`.
+The role trust policy allows the `aboodi679/statusnest-*` repos to assume it on pushes to `main`.
 
 ---
 
-## API Connection
+## Notes
 
-The frontend calls the Status Page Service directly via the ALB:
-
-```
-http://statusnest-dev-alb-1293848550.us-east-1.elb.amazonaws.com/status/{username}
-```
+- Route 53 / custom domain intentionally omitted (CloudFront default certificate used)
+- RDS uses PostgreSQL instead of Aurora (account-level restrictions)
+- Monitor and status ECS task definitions were created via CLI and are not yet fully managed by Terraform (auth task definition is Terraform-managed)
 
 ---
 
 ## Related Repos
 
 | Repo | Description |
-|------|-------------|
-| [statusnest-api](https://github.com/aboodi679/statusnest-api) | FastAPI backend — 3 microservices |
-| [statusnest-infra](https://github.com/aboodi679/statusnest-infra) | Terraform IaC |
-| [statusnest-worker](https://github.com/aboodi679/statusnest-worker) | Lambda monitor + processor |
-
----
-
-*Built by [Muhammad Abdullah](https://github.com/aboodi679) · Powered by AWS S3*
+|---|---|
+| [statusnest-api](https://github.com/aboodi679/statusnest-api) | FastAPI microservices (auth, monitor, status) |
+| [statusnest-worker](https://github.com/aboodi679/statusnest-worker) | Lambda monitor + SQS processor |
+| [statusnest-frontend](https://github.com/aboodi679/statusnest-frontend) | React SPA |
