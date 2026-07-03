@@ -1,106 +1,77 @@
-# StatusNest Infra
+# StatusNest Frontend
 
-Terraform IaC for the StatusNest multi-tenant service monitoring platform. Provisions the complete AWS infrastructure across modular, reusable components.
+React SPA for the StatusNest multi-tenant service monitoring platform. Provides a real-time dashboard for managing services, incidents, and subscribers, plus a public status page for each user.
 
-**Account:** `026243800492` | **Region:** `us-east-1`
+**Live Demo:** https://d1wwgn689544k.cloudfront.net  
+**Public Status Page:** https://d1wwgn689544k.cloudfront.net/status/abood
 
 ---
 
-## Architecture
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | React 18 |
+| HTTP Client | Axios |
+| Routing | React Router v6 |
+| Styling | Inline CSS (Inter font, dark theme) |
+| Hosting | AWS S3 + CloudFront |
+| CDN / TLS | AWS CloudFront (HTTPS enforced) |
+| WAF | AWS WAF v2 (via CloudFront) |
+
+---
+
+## Features
+
+- **Login** — JWT-based authentication against the auth service
+- **Dashboard** — Manage services, incidents, and subscribers in a tabbed UI
+- **Live Status Badges** — UP / DOWN / UNKNOWN per service, polled from Redis cache
+- **Public Status Page** — `/status/:username` — no login required, shows all active services with response times and 24h history
+- **Incident Management** — Create and update incidents with status transitions (investigating → identified → monitoring → resolved)
+- **Subscriber Management** — Add email subscribers for status alerts
+
+---
+
+## Project Structure
 
 ```
-Internet
-    │
-    ▼
-AWS WAF v2
-    │
-    ▼
-CloudFront (d1wwgn689544k.cloudfront.net)
-    ├── /auth/*  ──────────────────────────────────┐
-    ├── /api/*   ──────────────────────────────────┤
-    │                                              ▼
-    │                                    ALB (statusnest-dev-alb)
-    │                                              │
-    │                              ┌───────────────┼───────────────┐
-    │                              ▼               ▼               ▼
-    │                         auth:8000      monitor:8001    status:8002
-    │                         ECS Fargate    ECS Fargate     ECS Fargate
-    │                              │               │               │
-    └── default → S3 ─────────┐   └───────────────┴───────────────┘
-                               ▼               │
-                         React SPA         RDS PostgreSQL
-                                            ElastiCache Redis
+src/
+├── App.js                  # Routes: /, /login, /dashboard, /status/:username
+├── pages/
+│   ├── LandingPage.js      # Marketing landing page
+│   ├── LoginPage.js        # JWT login form
+│   ├── DashboardPage.js    # Authenticated dashboard (services, incidents, subscribers)
+│   └── StatusPage.js       # Public status page
 ```
 
 ---
 
-## Modules
+## API Connection
 
-| Module | Resources |
-|---|---|
-| `vpc` | VPC, public/private subnets, IGW, NAT Gateway, route tables |
-| `rds` | RDS PostgreSQL, subnet group, security group |
-| `elasticache` | Redis cluster, subnet group, security group |
-| `ecr` | ECR repositories for auth, monitor, status images |
-| `ecs` | ECS cluster, Fargate task definitions, services, IAM roles |
-| `alb` | Application Load Balancer, target groups, listener rules |
-| `frontend` | S3 bucket, CloudFront distribution, OAC, bucket policy |
-| `waf` | WAF v2 Web ACL (CloudFront-scoped, `us-east-1`) |
-| `waf-alb` | WAF v2 Web ACL (ALB-scoped, regional) |
-| `monitoring` | CloudWatch dashboards, alarms |
+All API calls go through CloudFront which proxies to the ALB:
 
----
-
-## Key Infrastructure
-
-| Resource | Value |
-|---|---|
-| CloudFront | `d1wwgn689544k.cloudfront.net` (ID: `E1PD475EXURYXL`) |
-| ALB | `statusnest-dev-alb-1293848550.us-east-1.elb.amazonaws.com` |
-| ECS Cluster | `statusnest-dev-cluster` |
-| RDS | `statusnest-dev-db.c2hcyc4yyuxy.us-east-1.rds.amazonaws.com` |
-| Redis | `statusnest-dev-redis.b8x2ra.0001.use1.cache.amazonaws.com:6379` |
-| S3 Bucket | `statusnest-dev-frontend` |
-| GitHub Actions Role | `arn:aws:iam::026243800492:role/statusnest-dev-github-actions-role` |
-
----
-
-## Usage
-
-```bash
-cd statusnest-infra
-
-# Init
-terraform init
-
-# Plan
-terraform plan -var="environment=dev"
-
-# Apply
-terraform apply -var="environment=dev"
+```
+https://d1wwgn689544k.cloudfront.net
+  /auth/*      → Auth ECS service (port 8000)
+  /api/*       → Monitor / Status ECS services (ports 8001, 8002)
+  default      → S3 frontend (React SPA)
 ```
 
-### Variables
+The `ALB` constant in `DashboardPage.js` and `StatusPage.js` is set to the CloudFront URL:
 
-| Variable | Description |
-|---|---|
-| `environment` | Deployment environment (`dev`, `prod`) |
-
----
-
-## CI/CD Integration
-
-GitHub Actions uses OIDC to assume the GitHub Actions IAM role — no long-lived AWS credentials stored in GitHub secrets.
-
-The role trust policy allows the `aboodi679/statusnest-*` repos to assume it on pushes to `main`.
+```js
+const ALB = 'https://d1wwgn689544k.cloudfront.net';
+```
 
 ---
 
-## Notes
+## Deploy
 
-- Route 53 / custom domain intentionally omitted (CloudFront default certificate used)
-- RDS uses PostgreSQL instead of Aurora (account-level restrictions)
-- Monitor and status ECS task definitions were created via CLI and are not yet fully managed by Terraform (auth task definition is Terraform-managed)
+```powershell
+npm run build
+aws s3 sync build/ s3://statusnest-dev-frontend --delete
+aws cloudfront create-invalidation --distribution-id E1PD475EXURYXL --paths "/*"
+```
 
 ---
 
@@ -110,4 +81,4 @@ The role trust policy allows the `aboodi679/statusnest-*` repos to assume it on 
 |---|---|
 | [statusnest-api](https://github.com/aboodi679/statusnest-api) | FastAPI microservices (auth, monitor, status) |
 | [statusnest-worker](https://github.com/aboodi679/statusnest-worker) | Lambda monitor + SQS processor |
-| [statusnest-frontend](https://github.com/aboodi679/statusnest-frontend) | React SPA |
+| [statusnest-infra](https://github.com/aboodi679/statusnest-infra) | Terraform IaC for all AWS infrastructure |
