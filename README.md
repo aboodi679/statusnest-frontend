@@ -1,70 +1,100 @@
-# Getting Started with Create React App
+# StatusNest Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+> React dashboard for StatusNest — hosted on AWS S3 + CloudFront
 
-## Available Scripts
+A clean, dark-themed React application that serves as the public-facing frontend for StatusNest. Users can view live status pages for any registered tenant.
 
-In the project directory, you can run:
+**Live:** http://statusnest-dev-frontend.s3-website.us-east-1.amazonaws.com
 
-### `npm start`
+---
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## Features
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+- **Landing page** — enter any username to view their live status page
+- **Public status page** — shows all monitored services with UP/DOWN status and latency
+- **Incident banner** — displays active incidents at the top
+- **Service history** — 24h status history per service
+- **Real-time data** — reads from Redis via Status Page Service (updated every 60s)
 
-### `npm test`
+---
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Tech Stack
 
-### `npm run build`
+| Layer | Technology |
+|-------|-----------|
+| Framework | React 18 |
+| Styling | Inline CSS + Google Fonts (Inter) |
+| Hosting | AWS S3 Static Website |
+| Build | Create React App |
+| CI/CD | GitHub Actions |
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+---
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## Project Structure
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```
+statusnest-frontend/
+├── public/
+│   └── index.html
+├── src/
+│   ├── pages/
+│   │   └── StatusPage.js      # Public status page view
+│   ├── components/
+│   │   └── ServiceCard.js     # Individual service status card
+│   ├── App.js                 # Landing page + routing
+│   └── index.js
+├── .github/
+│   └── workflows/
+│       └── deploy.yml         # S3 deploy on push to main
+└── package.json
+```
 
-### `npm run eject`
+---
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## Local Development
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```bash
+git clone https://github.com/aboodi679/statusnest-frontend
+cd statusnest-frontend
+npm install
+npm start
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+Opens at `http://localhost:3000`
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+---
 
-## Learn More
+## Deployment
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+Build and sync to S3:
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+```bash
+npm run build
+aws s3 sync build/ s3://statusnest-dev-frontend --region us-east-1
+```
 
-### Code Splitting
+CI/CD via GitHub Actions — auto deploys on every push to `main`.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+---
 
-### Analyzing the Bundle Size
+## API Connection
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+The frontend calls the Status Page Service directly via the ALB:
 
-### Making a Progressive Web App
+```
+http://statusnest-dev-alb-1293848550.us-east-1.elb.amazonaws.com/status/{username}
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+---
 
-### Advanced Configuration
+## Related Repos
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+| Repo | Description |
+|------|-------------|
+| [statusnest-api](https://github.com/aboodi679/statusnest-api) | FastAPI backend — 3 microservices |
+| [statusnest-infra](https://github.com/aboodi679/statusnest-infra) | Terraform IaC |
+| [statusnest-worker](https://github.com/aboodi679/statusnest-worker) | Lambda monitor + processor |
 
-### Deployment
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+*Built by [Muhammad Abdullah](https://github.com/aboodi679) · Powered by AWS S3*
